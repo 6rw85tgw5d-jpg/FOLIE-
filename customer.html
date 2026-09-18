@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>FOLIÉ — Customer Approval</title>
+<style>
+body{margin:0;background:#f4f2ee;color:#27231f;font-family:Arial,sans-serif}
+.wrap{max-width:980px;margin:auto;padding:24px}.card{background:#fff;border:1px solid #ddd8d0;border-radius:16px;padding:20px;margin:14px 0;box-shadow:0 4px 18px #0000000b}
+h1{letter-spacing:.12em}.muted{color:#777}.grid{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+table{width:100%;border-collapse:collapse}td,th{padding:9px;border-bottom:1px solid #eee;text-align:left}
+.btn{padding:12px 18px;border:0;border-radius:10px;cursor:pointer;font-weight:700}.approve{background:#222;color:#fff}.reject{background:#eee}
+canvas{width:100%;height:180px;border:1px dashed #aaa;border-radius:10px;touch-action:none}
+#door{width:100%;height:360px;background:#ece9e4;border-radius:12px}
+@media(max-width:700px){.grid{grid-template-columns:1fr}}
+</style></head>
+<body>
+<div class="wrap">
+<h1>FOLIÉ</h1><div class="muted">Customer Approval Portal</div>
+<div id="loading" class="card">Loading quotation…</div>
+<div id="app" style="display:none">
+<div class="card"><div id="status"></div><h2 id="project"></h2><p id="customer"></p><p id="quote"></p></div>
+<div class="grid">
+<div class="card"><h3>Door Design</h3><svg id="door" viewBox="0 0 300 420"></svg></div>
+<div class="card"><h3>Quotation</h3><table><tbody id="summary"></tbody></table><p id="total"></p></div>
+</div>
+<div class="card"><h3>Payment Schedule</h3><table id="payments"></table></div>
+<div class="card"><h3>Documents & Payment</h3>
+<p><a id="pdf" class="btn reject" target="_blank">View / Print PDF Package</a>
+<button class="btn reject" id="wa">Prepare WhatsApp Message</button>
+<button class="btn reject" id="email">Prepare Email</button></p>
+<div id="paymentStatus"></div></div>
+<div class="card"><h3>Customer Approval</h3><p>I confirm that the quotation, dimensions, finishes and payment schedule shown above are correct.</p>
+<canvas id="sig" width="900" height="300"></canvas><br><button class="btn reject" id="clear">Clear Signature</button>
+<div style="margin-top:16px"><button class="btn approve" id="approve">Approve Quotation</button> <button class="btn reject" id="reject">Reject / Request Changes</button></div>
+<p id="msg"></p></div>
+</div></div>
+<script>
+const token=decodeURIComponent(location.pathname.split('/').pop());
+let rec=null;
+const $=id=>document.getElementById(id);
+function money(v){return Number(v||0).toFixed(2)+' '+(rec.currency||'OMR')}
+function draw(){
+ const s=$('door');s.innerHTML='';const NS='http://www.w3.org/2000/svg';
+ let x=90,y=10,w=120,h=390;let totalH=Number(rec.height||300),totalW=Number(rec.width||250);
+ let bg=document.createElementNS(NS,'rect');Object.assign(bg,{x,y,width:w,height:h,rx:2});bg.setAttribute('fill','#76513d');s.appendChild(bg);
+ let yy=y;
+ (rec.zones||[]).forEach(z=>{let zh=Number(z.height||0),hh=h*zh/totalH;let xx=x;
+  (z.subs||[]).forEach(m=>{let ww=w*Number(m.width||0)/totalW;let r=document.createElementNS(NS,'rect');r.setAttribute('x',xx);r.setAttribute('y',yy);r.setAttribute('width',ww);r.setAttribute('height',hh);r.setAttribute('stroke','#29221e');r.setAttribute('fill',(String(m.type).toLowerCase()=='glass')?'#667b87':(String(m.finish).toLowerCase()=='walnut'?'#4b2d21':'#76513d'));s.appendChild(r);xx+=ww});yy+=hh
+ });
+}
+async function load(){
+ try{
+  let r=await fetch('/api/quotes/'+token);if(!r.ok)throw Error('not found');rec=await r.json();
+  $('loading').style.display='none';$('app').style.display='block';
+  $('status').innerHTML='<b>Status: '+(rec.status||'Draft')+'</b>';
+  $('project').textContent=rec.project||'Quotation';$('customer').textContent='Customer: '+(rec.customer||'');
+  $('quote').textContent='Quotation: '+(rec.no||'')+' · Revision '+(rec.revision||1);
+  $('summary').innerHTML='<tr><td>Door Size</td><td>'+rec.width+' × '+rec.height+' cm</td></tr><tr><td>Opening</td><td>'+ (rec.opening||'')+'</td></tr><tr><td>Mode</td><td>'+ (rec.mode||'')+'</td></tr>';
+  $('total').innerHTML='<strong>Total: '+money(rec.total)+'</strong>';$('pdf').href='/api/quotes/'+token+'/pdf';$('paymentStatus').innerHTML=(rec.payments||[]).map(p=>`<p>☐ ${p.name} — ${p.pct}% — ${money(Number(rec.total||0)*Number(p.pct||0)/100)}</p>`).join('');draw();
+  $('payments').innerHTML='<tr><th>Milestone</th><th>%</th><th>Amount</th></tr>'+((rec.payments||[]).map(p=>'<tr><td>'+p.name+'</td><td>'+p.pct+'%</td><td>'+money(Number(rec.total||0)*Number(p.pct||0)/100)+'</td></tr>').join(''));
+ }catch(e){$('loading').innerHTML='<b>Quotation not found.</b><p class="muted">Please check the approval link.</p>'}
+}
+const c=$('sig'),ctx=c.getContext('2d');let down=false;
+function pos(e){let r=c.getBoundingClientRect(),p=e.touches?e.touches[0]:e;return[(p.clientX-r.left)*c.width/r.width,(p.clientY-r.top)*c.height/r.height]}
+c.onpointerdown=e=>{down=true;let p=pos(e);ctx.beginPath();ctx.moveTo(...p)};c.onpointermove=e=>{if(!down)return;let p=pos(e);ctx.lineTo(...p);ctx.stroke()};c.onpointerup=()=>down=false;c.onpointerleave=()=>down=false;
+$('clear').onclick=()=>ctx.clearRect(0,0,c.width,c.height);
+$('approve').onclick=async()=>{if(!rec)return;let data=c.toDataURL('image/png');let r=await fetch('/api/quotes/'+token+'/approve',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({signature_data:data,approvedAt:new Date().toISOString()})});let j=await r.json();$('msg').textContent=r.ok?'Thank you. The quotation has been approved.':'Unable to approve. Please try again.';if(r.ok)$('status').innerHTML='<b>Status: Approved</b>'};
+$('wa').onclick=()=>{let msg=`FOLIÉ Quotation ${rec.no}\\nProject: ${rec.project}\\nTotal: ${money(rec.total)}\\nApproval: ${location.href}`;location.href='https://wa.me/?text='+encodeURIComponent(msg)};
+$('email').onclick=()=>{let subject=`FOLIÉ Quotation ${rec.no}`;let body=`Dear ${rec.customer||'Customer'},\\n\\nPlease review your quotation here: ${location.href}\\n\\nTotal: ${money(rec.total)}\\n\\nThank you.`;location.href='mailto:?subject='+encodeURIComponent(subject)+'&body='+encodeURIComponent(body)};
+$('reject').onclick=()=>{let reason=prompt('Please enter the changes you need:');if(!reason)return;fetch('/api/quotes/'+token+'/status',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({status:'Changes Requested',customer_note:reason})}).then(()=>{$('msg').textContent='Your change request has been recorded.';$('status').innerHTML='<b>Status: Changes Requested</b>'})};
+load();
+</script></body></html>

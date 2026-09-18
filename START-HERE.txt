@@ -1,0 +1,9 @@
+FOLIÉ DOOR MANAGEMENT SYSTEM
+
+1. Open index.html.
+2. Click "Open Application".
+3. Use Backup & Restore before clearing browser data.
+
+For local server mode:
+- Python 3: python server.py
+- Then open the local address printed by the server.

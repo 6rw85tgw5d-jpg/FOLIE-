@@ -1,0 +1,8 @@
+{
+  "name": "FOLIÉ Door Management System",
+  "short_name": "FOLIÉ",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#111111"
+}
